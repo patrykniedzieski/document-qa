@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from openai import OpenAI
 
 # --- PROSTE LOGOWANIE ---
 USERNAME = "admin"
@@ -25,36 +24,41 @@ if not st.session_state.logged_in:
     login()
     st.stop()
 
+# --- Wylogowanie ---
 if st.button("Wyloguj"):
     st.session_state.logged_in = False
     st.rerun()
 
-# --- APLIKACJA ---
-st.title("📄 CSV Mapping & Document QA")
+# --- GŁÓWNY PANEL ---
+st.title("📄 CSV Multi-Attribute Mapping")
 
-# OpenAI API Key
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
-    client = OpenAI(api_key=openai_api_key)
+# Upload CSV
+uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+    st.subheader("Podgląd danych źródłowych")
+    st.dataframe(df.head())
 
-    # --- Upload CSV ---
-    uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
-    
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        st.write("Podgląd danych:", df.head())
+    # --- Definiowanie atrybutów docelowych ---
+    target_attributes = ["Price", "ProductName", "Quantity"]  # Możesz dodać więcej
+    column_mapping = {}
 
-        # --- Mapowanie kolumn ---
-        price_column = st.selectbox("Wybierz kolumnę, która odpowiada za Price", df.columns)
+    st.subheader("Mapowanie kolumn na atrybuty docelowe")
+    for attr in target_attributes:
+        if df.columns.any():
+            selected_col = st.selectbox(f"Wybierz kolumnę źródłową dla '{attr}'", df.columns, key=attr)
+            column_mapping[attr] = selected_col
 
-        if st.button("Mapuj kolumnę Price"):
-            df_mapped = df.copy()
-            df_mapped["Price"] = df_mapped[price_column]
-            st.success(f"Kolumna '{price_column}' została przypisana do 'Price'.")
-            st.write(df_mapped.head())
+    # --- Mapowanie danych ---
+    if st.button("Generuj CSV z mapowaniem"):
+        df_mapped = pd.DataFrame()
+        for attr, col in column_mapping.items():
+            df_mapped[attr] = df[col]
+        
+        st.success("Dane zostały zmapowane!")
+        st.subheader("Podgląd zmapowanych danych")
+        st.dataframe(df_mapped.head())
 
-            # Opcja zapisu
-            csv = df_mapped.to_csv(index=False).encode("utf-8")
-            st.download_button("Pobierz zmodyfikowany CSV", csv, "mapped.csv", "text/csv")
+        # --- Pobranie CSV ---
+        csv = df_mapped.to_csv(index=False).encode("utf-8")
+        st.download_button("Pobierz CSV", csv, "mapped.csv", "text/csv")
