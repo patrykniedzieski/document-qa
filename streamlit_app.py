@@ -1,22 +1,18 @@
 import streamlit as st
+import pandas as pd
 from openai import OpenAI
 
-# --- Dane logowania ---
+# --- PROSTE LOGOWANIE ---
 USERNAME = "admin"
 PASSWORD = "1234"
 
-# --- Session state ---
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-
-# --- Funkcja logowania ---
 def login():
     st.title("🔐 Panel logowania")
-
     username = st.text_input("Login")
     password = st.text_input("Hasło", type="password")
-
     if st.button("Zaloguj"):
         if username == USERNAME and password == PASSWORD:
             st.session_state.logged_in = True
@@ -25,59 +21,40 @@ def login():
         else:
             st.error("Nieprawidłowy login lub hasło")
 
-
-# --- Jeśli użytkownik nie jest zalogowany ---
 if not st.session_state.logged_in:
     login()
     st.stop()
 
-
-# --- Logout ---
 if st.button("Wyloguj"):
     st.session_state.logged_in = False
     st.rerun()
 
-
 # --- APLIKACJA ---
-st.title("📄 Document question answering")
+st.title("📄 CSV Mapping & Document QA")
 
-st.write(
-    "Upload a document below and ask a question about it – GPT will answer!"
-)
-
+# OpenAI API Key
 openai_api_key = st.text_input("OpenAI API Key", type="password")
-
 if not openai_api_key:
     st.info("Please add your OpenAI API key to continue.", icon="🗝️")
 else:
-
     client = OpenAI(api_key=openai_api_key)
 
-    uploaded_file = st.file_uploader(
-        "Upload a document (.txt or .md)", type=("txt", "md")
-    )
+    # --- Upload CSV ---
+    uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
+    
+    if uploaded_file:
+        df = pd.read_csv(uploaded_file)
+        st.write("Podgląd danych:", df.head())
 
-    question = st.text_area(
-        "Now ask a question about the document!",
-        placeholder="Can you give me a short summary?",
-        disabled=not uploaded_file,
-    )
+        # --- Mapowanie kolumn ---
+        price_column = st.selectbox("Wybierz kolumnę, która odpowiada za Price", df.columns)
 
-    if uploaded_file and question:
+        if st.button("Mapuj kolumnę Price"):
+            df_mapped = df.copy()
+            df_mapped["Price"] = df_mapped[price_column]
+            st.success(f"Kolumna '{price_column}' została przypisana do 'Price'.")
+            st.write(df_mapped.head())
 
-        document = uploaded_file.read().decode()
-
-        messages = [
-            {
-                "role": "user",
-                "content": f"Here's a document: {document} \n\n---\n\n {question}",
-            }
-        ]
-
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            stream=True,
-        )
-
-        st.write_stream(stream)
+            # Opcja zapisu
+            csv = df_mapped.to_csv(index=False).encode("utf-8")
+            st.download_button("Pobierz zmodyfikowany CSV", csv, "mapped.csv", "text/csv")
